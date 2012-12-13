@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+//////////////////////////////////////////////////////////////////////////////////////
+//
+//	Copyright 2011 Piotr Walczyszyn (http://riaspace.com | @pwalczyszyn)
+//	
+//	Licensed under the Apache License, Version 2.0 (the "License");
+//	you may not use this file except in compliance with the License.
+//	You may obtain a copy of the License at
+//	
+//		http://www.apache.org/licenses/LICENSE-2.0
+//	
+//	Unless required by applicable law or agreed to in writing, software
+//	distributed under the License is distributed on an "AS IS" BASIS,
+//	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//	See the License for the specific language governing permissions and
+//	limitations under the License.
+//	
+//////////////////////////////////////////////////////////////////////////////////////
+-->
+<s:View xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		xmlns:s="library://ns.adobe.com/flex/spark" title="C2DM"
+		creationComplete="view_creationCompleteHandler(event)">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.riaspace.c2dm.C2DM;
+			import com.riaspace.c2dm.C2DMMessage;
+			import com.riaspace.c2dm.events.C2DMErrorEvent;
+			import com.riaspace.c2dm.events.C2DMMessageEvent;
+			import com.riaspace.c2dm.events.C2DMRegistrationEvent;
+			
+			import mx.events.FlexEvent;
+			
+			import spark.managers.PersistenceManager;
+			
+			protected var persistence:PersistenceManager = new PersistenceManager;
+			
+			protected var c2dm:C2DM;
+			
+			[Bindable]
+			protected var registered:Boolean = false;
+			
+			protected function view_creationCompleteHandler(event:FlexEvent):void
+			{
+				if (C2DM.isSupported)
+				{
+					// Using C2DM ANE to register application in C2DM service
+					c2dm = new C2DM;
+					
+					// !!! enable auto notify if you want to use old extension functionality !!!
+					// c2dm.enableAutoNotify();
+					
+					// Listening for un/registered, messagr and error events
+					c2dm.addEventListener(C2DMRegistrationEvent.REGISTERED, onRegistered);
+					c2dm.addEventListener(C2DMRegistrationEvent.UNREGISTERED, onUnregistered);
+					c2dm.addEventListener(C2DMMessageEvent.MESSAGE, onMessage);
+					c2dm.addEventListener(C2DMErrorEvent.ERROR, onError);
+					
+					// Checking if application was already registered in C2DM service
+					var registrationId:String = persistence.getProperty("registration_id") as String;
+					registered = registrationId != null;
+					
+					trace("Current registration id:", registrationId);
+				}
+			}
+			
+			protected function onMessage(event:C2DMMessageEvent):void
+			{
+				var msg:C2DMMessage = c2dm.message();
+				var notifyTickerText:String;
+				var notifyContentTitle:String;
+				var notifyContentText:String;
+				switch (msg.messageType) 
+				{
+					case "0": // начало трансляции
+						notifyTickerText = "Начинается трансляция " + msg.itemName;
+						notifyContentTitle = "Начинается трансляция";
+						notifyContentText = "Начинается трансляция " + msg.itemName + ". Посмотрим?";
+					break;
+					
+					case "1": // окончание абонемента
+						notifyTickerText = "Закончился абонемент";
+						notifyContentTitle = "Закончился абонемент";
+						notifyContentText = " Закончился абонемент \«"+ msg.itemName+"\».";			
+					break;
+
+				}
+				
+				if (notifyTickerText && notifyContentTitle && notifyContentText)
+				{
+					c2dm.showNotification(notifyTickerText,notifyContentTitle,notifyContentText, JSON.stringify({type:msg.messageType, itemId:msg.itemId}));
+				}
+			}
+			private function onError(event:C2DMErrorEvent):void
+			{
+				trace("C2DM error:", event.errorCode);
+			}
+
+			protected function btnRegister_clickHandler(event:MouseEvent):void
+			{
+				// Passing the C2DM registration sender email
+				c2dm.register("your@email.ru");
+			}
+			
+			protected function btnUnregister_clickHandler(event:MouseEvent):void
+			{
+				// Unregistering from C2DM service
+				c2dm.unregister();
+			}
+
+			private function onRegistered(event:C2DMRegistrationEvent):void
+			{
+				trace("Registered with registration id:", event.registrationId);
+				
+				// Storing registration id received from C2DM service
+				persistence.setProperty("registration_id", event.registrationId);
+
+				registered = true;
+			}
+			
+			private function onUnregistered(event:C2DMRegistrationEvent):void
+			{
+				trace("Unregistered from C2DM service");
+				
+				// Removing current registration id
+				persistence.setProperty("registration_id", null);
+				
+				registered = false;
+			}
+
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<s:VGroup verticalCenter="0" horizontalCenter="0" gap="20">
+		<s:Button id="btnRegister" label="Register" click="btnRegister_clickHandler(event)" 
+				  enabled="{!registered &amp;&amp; C2DM.isSupported}" width="150" />
+		<s:Button id="btnUnregister" label="Unregister" click="btnUnregister_clickHandler(event)" 
+				  enabled="{registered &amp;&amp; C2DM.isSupported}" width="150" />
+	</s:VGroup>
+	
+</s:View>
